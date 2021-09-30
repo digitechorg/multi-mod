@@ -1,0 +1,97 @@
+apply plugin: 'java'
+apply plugin: 'ru.alfalab.cucumber-reporting'
+
+
+ext {
+    cucumberVersion = "6.10.0"
+}
+
+dependencies{
+    testCompileOnly 'org.projectlombok:lombok:1.18.12'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.12'
+    // Junit
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation group: 'org.hamcrest', name: 'hamcrest-all', version: '1.3'
+    testImplementation('org.mockito:mockito-core:3.7.7')
+
+    // BDD
+    testImplementation group: 'io.cucumber', name: 'cucumber-java', version: "$cucumberVersion"
+    testImplementation group: 'io.cucumber', name: 'cucumber-junit', version: "$cucumberVersion"
+    testImplementation group: 'io.cucumber', name: 'cucumber-spring', version: "$cucumberVersion"
+    testImplementation group: 'org.mock-server', name: 'mockserver-spring-test-listener', version: "5.11.2"
+}
+
+test {
+    useJUnitPlatform()
+}
+
+
+// Functional testing using BDD Cucumber
+
+task bdd(type: JavaExec) {
+    classpath = sourceSets.test.runtimeClasspath
+    main = 'org.junit.runner.JUnitCore'
+    def param = []
+    if(project.hasProperty("cloud")){
+        param.add("-Dcloud="+project.getProperties().get("cloud"))
+        param.add("-Dspring.profiles.active=local")
+        args = ['bdd.cucumber.test.runner.BDDTestRunner']
+    }else{
+        param.add("-Dspring.profiles.active=local")
+        args = ['bdd.cucumber.test.runner.BDDTestRunner']
+    }
+
+    jvmArgs = param;
+    systemProperty "cucumber.options", System.properties.getProperty("cucumber.options")
+}
+
+configurations {
+    drivers
+}
+
+//
+//def groupname, applicationname, adapterversion
+task afterEvaluate() {
+    //groupname
+    //applicationname
+    //adapterversion
+
+    if(!project.hasProperty("cloud")){
+    //    appversion= /$groupname:$applicationname:$adapterversion/
+    }
+}
+
+dependencies {
+    if(!project.hasProperty("cloud")){
+        drivers(appversion){
+            transitive = false
+        }
+    }
+}
+
+def moveToCucumberBuild = new File(buildDir,'appJar')
+if(!project.hasProperty("cloud")){
+    if(!moveToCucumberBuild.exists()){
+        moveToCucumberBuild.mkdirs()
+    }
+
+    taskCopyAppJarToCucumberBuildFolder(type:copy){
+        if(project.hasProperty("skipcloud") ){
+            from tarTree(configurations.drivers.singleFile)
+            into moveToCucumberBuild
+            }else {
+            from project.findProject(':inventory-services').projectDir
+            into moveToCucumberBuild
+        }
+        }
+}
+if(!project.hasProperty("cloud")){
+    project.tasks.bdd.dependsOn project.tasks.taskCopyAppJarToCucumberBuildFolder
+}
+
+
+// to generate cucumber JVM report
+cucumberReporting {
+    cucumberResultsDirectory = file("${project.buildDir}/cucumber") // cucumber results dir (eg. cucumber.json location)
+    outputDirectory = file("${project.buildDir}/reports/cucumber") // directory for save html reports
+}
